@@ -1,4 +1,4 @@
-use tokio::proto::pipeline::Frame;
+use tokio::proto::pipeline::{self, Frame};
 use std::error;
 use std::fmt;
 use std::io;
@@ -135,6 +135,15 @@ impl fmt::Debug for Value {
 /// struct.
 pub struct RedisError {
     repr: ErrorRepr,
+}
+
+impl From<pipeline::Error<RedisError>> for RedisError {
+    fn from(src: pipeline::Error<RedisError>) -> RedisError {
+        match src {
+            pipeline::Error::Io(e) => RedisError { repr: ErrorRepr::IoError(e) },
+            pipeline::Error::Transport(e) => e,
+        }
+    }
 }
 
 impl Into<io::Result<Option<Frame<Value, RedisError>>>> for RedisError {
@@ -367,15 +376,6 @@ pub struct InfoDict {
 ///
 /// For instance this can be used to query the server for the role it's
 /// in (master, slave) etc:
-///
-/// ```rust,no_run
-/// # fn do_something() -> redis::RedisResult<()> {
-/// # let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-/// # let con = client.get_connection().unwrap();
-/// let info : redis::InfoDict = try!(redis::cmd("INFO").query(&con));
-/// let role : Option<String> = info.get("role");
-/// # Ok(()) }
-/// ```
 impl InfoDict {
     /// Creates a new info dictionary from a string in the response of
     /// the INFO command.  Each line is a key, value pair with the

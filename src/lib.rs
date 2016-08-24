@@ -14,7 +14,8 @@ use transport::RedisTransport;
 use tokio::Service;
 use tokio::reactor::{Reactor, ReactorHandle};
 use tokio::proto::pipeline;
-use tokio::util::future::Val;
+use tokio::tcp::TcpStream;
+use tokio::util::future::{Empty, Val};
 use std::io;
 use std::net::SocketAddr;
 
@@ -43,7 +44,7 @@ pub struct Client {
 
 #[derive(Clone)]
 pub struct ClientHandle {
-    inner: pipeline::ClientHandle<Cmd, Value, Error>,
+    inner: pipeline::Client<Cmd, Value, Empty<(), Error>, Error>,
 }
 
 pub type Response = Val<Value, Error>;
@@ -69,7 +70,11 @@ impl Client {
         let addr = addr.clone();
 
         // Connect the client
-        let client = pipeline::connect(&reactor, addr, |stream| Ok(RedisTransport::new(stream)));
+        let client = pipeline::connect(&reactor, move || {
+            let stream = try!(TcpStream::connect(&addr));
+            Ok(RedisTransport::new(stream))
+        });
+
         Ok(ClientHandle { inner: client })
     }
 }
@@ -80,7 +85,7 @@ impl ClientHandle {
         let mut cmd = Cmd::new();
         cmd.arg(if key.is_single_arg() { "GET" } else { "MGET" }).arg(key);
 
-        self.inner.call(cmd)
+        self.call(cmd)
     }
 
     /// Set the string value of a key.
@@ -88,7 +93,7 @@ impl ClientHandle {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg(key).arg(value);
 
-        self.inner.call(cmd)
+        self.call(cmd)
     }
 }
 
@@ -99,6 +104,6 @@ impl Service for ClientHandle {
     type Fut = Response;
 
     fn call(&self, req: Cmd) -> Response {
-        self.inner.call(req)
+        self.inner.call(pipeline::Message::WithoutBody(req))
     }
 }

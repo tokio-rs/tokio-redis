@@ -23,52 +23,12 @@ pub struct Cmd {
     is_ignored: bool,
 }
 
-/// A command acts as a builder interface to creating encoded redis
-/// requests.  This allows you to easiy assemble a packed command
-/// by chaining arguments together.
-///
-/// Basic example:
-///
-/// ```rust
-/// redis::Cmd::new().arg("SET").arg("my_key").arg(42);
-/// ```
-///
-/// There is also a helper function called `cmd` which makes it a
-/// tiny bit shorter:
-///
-/// ```rust
-/// redis::cmd("SET").arg("my_key").arg(42);
-/// ```
-///
-/// Because currently rust's currently does not have an ideal system
-/// for lifetimes of temporaries, sometimes you need to hold on to
-/// the initially generated command:
-///
-/// ```rust,no_run
-/// # let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-/// # let con = client.get_connection().unwrap();
-/// let mut cmd = redis::cmd("SMEMBERS");
-/// let mut iter : redis::Iter<i32> = cmd.arg("my_set").iter(&con).unwrap();
-/// ```
 impl Cmd {
     /// Creates a new empty command.
     pub fn new() -> Cmd {
         Cmd { args: vec![], cursor: None, is_ignored: false }
     }
 
-    /// Appends an argument to the command.  The argument passed must
-    /// be a type that implements `ToRedisArgs`.  Most primitive types as
-    /// well as vectors of primitive types implement it.
-    ///
-    /// For instance all of the following are valid:
-    ///
-    /// ```rust,no_run
-    /// # let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    /// # let con = client.get_connection().unwrap();
-    /// redis::cmd("SET").arg(&["my_key", "my_value"]);
-    /// redis::cmd("SET").arg("my_key").arg(42);
-    /// redis::cmd("SET").arg("my_key").arg(b"my_value");
-    /// ```
     #[inline]
     pub fn arg<T: ToRedisArgs>(&mut self, arg: T) -> &mut Cmd {
         for item in arg.to_redis_args().into_iter() {
@@ -77,20 +37,6 @@ impl Cmd {
         self
     }
 
-    /// Works similar to `arg` but adds a cursor argument.  This is always
-    /// an integer and also flips the command implementation to support a
-    /// different mode for the iterators where the iterator will ask for
-    /// another batch of items when the local data is exhausted.
-    ///
-    /// ```rust,no_run
-    /// # let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    /// # let con = client.get_connection().unwrap();
-    /// let mut cmd = redis::cmd("SSCAN");
-    /// let mut iter : redis::Iter<isize> = cmd.arg("my_set").cursor_arg(0).iter(&con).unwrap();
-    /// for x in iter {
-    ///     // do something with the item
-    /// }
-    /// ```
     #[inline]
     pub fn cursor_arg(&mut self, cursor: u64) -> &mut Cmd {
         assert!(!self.in_scan_mode());

@@ -151,6 +151,8 @@ impl<T> Transport for RedisTransport<T>
                 // Try to flush the write queue
                 self.flush()
             },
+            Frame::MessageWithBody(..) => unimplemented!(),
+            Frame::Body(..) => unimplemented!(),
             Frame::Error(_) => unimplemented!(),
             Frame::Done => unimplemented!(),
         }
