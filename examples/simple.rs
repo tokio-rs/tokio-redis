@@ -1,20 +1,20 @@
-extern crate futures;
-extern crate tokio;
-extern crate tokio_redis as redis;
 extern crate env_logger;
+extern crate futures;
+extern crate tokio_core;
+extern crate tokio_redis as redis;
 
 use futures::Future;
-use tokio::Service;
-use redis::{Client, Cmd};
+use tokio_core::Loop;
+use redis::Client;
 
 pub fn main() {
     env_logger::init().unwrap();
 
     let addr = "127.0.0.1:6379".parse().unwrap();
+    let mut lp = Loop::new().unwrap();
 
-    let c1 = Client::new()
-        .connect(&addr)
-        .unwrap();
+    let client = Client::new().connect(lp.handle(), &addr);
+    let c1 = lp.run(client).unwrap();
 
     let c2 = c1.clone();
 
@@ -25,19 +25,5 @@ pub fn main() {
     // let resp = client.get("zomghi2u");
     // let resp = client.call("Hello".to_string());
 
-    println!("RESPONSE: {:?}", await(r));
+    println!("RESPONSE: {:?}", lp.run(r));
 }
-
-// Why this isn't in futures-rs, I do not know...
-fn await<T: Future>(f: T) -> Result<T::Item, T::Error> {
-    use std::sync::mpsc;
-    let (tx, rx) = mpsc::channel();
-
-    f.then(move |res| {
-        tx.send(res).unwrap();
-        Ok::<(), ()>(())
-    }).forget();
-
-    rx.recv().unwrap()
-}
-

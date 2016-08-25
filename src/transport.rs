@@ -1,8 +1,8 @@
 use {Cmd, Value};
 use parser::Parser;
 use types::RedisError;
-use tokio::io::{Readiness, Transport};
-use tokio::proto::pipeline::{self, Frame};
+use tokio_proto::io::{Readiness, Transport};
+use tokio_proto::proto::pipeline::{self, Frame};
 use std::mem;
 use std::io::{self, Cursor};
 

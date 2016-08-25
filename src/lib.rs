@@ -1,5 +1,6 @@
-extern crate tokio;
-extern crate mio;
+extern crate tokio_proto;
+extern crate futures;
+extern crate tokio_core;
 
 #[macro_use]
 extern crate log;
@@ -10,14 +11,17 @@ mod parser;
 mod transport;
 mod types;
 
-use transport::RedisTransport;
-use tokio::Service;
-use tokio::reactor::{Reactor, ReactorHandle};
-use tokio::proto::pipeline;
-use tokio::tcp::TcpStream;
-use tokio::util::future::{Empty, Val};
-use std::io;
+use std::cell::RefCell;
 use std::net::SocketAddr;
+
+use futures::stream::Receiver;
+use futures::{Future, BoxFuture};
+use tokio_core::LoopHandle;
+use tokio_core::io::IoFuture;
+use tokio_proto::Service;
+use tokio_proto::proto::pipeline;
+
+use transport::RedisTransport;
 
 pub use cmd::Cmd;
 
@@ -39,43 +43,34 @@ pub use types::{
 };
 
 pub struct Client {
-    reactor: Option<ReactorHandle>,
+    _private: (),
 }
 
 #[derive(Clone)]
 pub struct ClientHandle {
-    inner: pipeline::Client<Cmd, Value, Empty<(), Error>, Error>,
+    inner: pipeline::Client<Cmd, Value, Receiver<(), Error>, Error>,
 }
 
-pub type Response = Val<Value, Error>;
+pub type Response = BoxFuture<Value, Error>;
 
 impl Client {
     pub fn new() -> Client {
         Client {
-            reactor: None,
+            _private: (),
         }
     }
 
-    pub fn connect(self, addr: &SocketAddr) -> io::Result<ClientHandle> {
-        let reactor = match self.reactor {
-            Some(r) => r,
-            None => {
-                let reactor = try!(Reactor::default());
-                let handle = reactor.handle();
-                reactor.spawn();
-                handle
-            },
-        };
+    pub fn connect(self,
+                   handle: LoopHandle,
+                   addr: &SocketAddr) -> IoFuture<ClientHandle> {
+        handle.clone().tcp_connect(addr).map(|tcp| {
+            let tcp = RefCell::new(Some(tcp));
+            let client = pipeline::connect(handle, move || {
+                Ok(RedisTransport::new(tcp.borrow_mut().take().unwrap()))
+            });
 
-        let addr = addr.clone();
-
-        // Connect the client
-        let client = pipeline::connect(&reactor, move || {
-            let stream = try!(TcpStream::connect(&addr));
-            Ok(RedisTransport::new(stream))
-        });
-
-        Ok(ClientHandle { inner: client })
+            ClientHandle { inner: client }
+        }).boxed()
     }
 }
 

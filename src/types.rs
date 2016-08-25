@@ -1,4 +1,4 @@
-use tokio::proto::pipeline::{self, Frame};
+use tokio_proto::proto::pipeline::{self, Frame};
 use std::error;
 use std::fmt;
 use std::io;
