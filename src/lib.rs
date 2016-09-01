@@ -19,7 +19,7 @@ use futures::{Future, BoxFuture};
 use tokio_core::LoopHandle;
 use tokio_core::io::IoFuture;
 use tokio_proto::Service;
-use tokio_proto::proto::pipeline;
+use tokio_proto::pipeline;
 
 use transport::RedisTransport;
 
