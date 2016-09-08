@@ -4,16 +4,16 @@ extern crate tokio_core;
 extern crate tokio_redis as redis;
 
 use futures::Future;
-use tokio_core::Loop;
+use tokio_core::reactor::Core;
 use redis::Client;
 
 pub fn main() {
     env_logger::init().unwrap();
 
     let addr = "127.0.0.1:6379".parse().unwrap();
-    let mut lp = Loop::new().unwrap();
+    let mut lp = Core::new().unwrap();
 
-    let client = Client::new().connect(lp.handle(), &addr);
+    let client = Client::new().connect(&lp.handle(), &addr);
     let c1 = lp.run(client).unwrap();
 
     let c2 = c1.clone();

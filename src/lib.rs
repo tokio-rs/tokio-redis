@@ -12,11 +12,13 @@ mod transport;
 mod types;
 
 use std::cell::RefCell;
+use std::io;
 use std::net::SocketAddr;
 
 use futures::stream::Receiver;
 use futures::{Future, BoxFuture};
-use tokio_core::LoopHandle;
+use tokio_core::reactor::Handle;
+use tokio_core::net::TcpStream;
 use tokio_core::io::IoFuture;
 use tokio_proto::Service;
 use tokio_proto::pipeline;
@@ -61,16 +63,18 @@ impl Client {
     }
 
     pub fn connect(self,
-                   handle: LoopHandle,
-                   addr: &SocketAddr) -> IoFuture<ClientHandle> {
-        handle.clone().tcp_connect(addr).map(|tcp| {
+                   handle: &Handle,
+                   addr: &SocketAddr)
+                   -> Box<Future<Item=ClientHandle, Error=io::Error>> {
+        let handle = handle.clone();
+        Box::new(TcpStream::connect(addr, &handle).and_then(move |tcp| {
             let tcp = RefCell::new(Some(tcp));
-            let client = pipeline::connect(handle, move || {
+            let client = try!(pipeline::connect(&handle, move || {
                 Ok(RedisTransport::new(tcp.borrow_mut().take().unwrap()))
-            });
+            }));
 
-            ClientHandle { inner: client }
-        }).boxed()
+            Ok(ClientHandle { inner: client })
+        }))
     }
 }
 
