@@ -146,8 +146,8 @@ impl From<pipeline::Error<RedisError>> for RedisError {
     }
 }
 
-impl Into<io::Result<Option<Frame<Value, RedisError>>>> for RedisError {
-    fn into(self) -> io::Result<Option<Frame<Value, RedisError>>> {
+impl Into<io::Result<Option<Frame<Value, (), RedisError>>>> for RedisError {
+    fn into(self) -> io::Result<Option<Frame<Value, (), RedisError>>> {
         use self::ErrorRepr::*;
 
         match self.repr {

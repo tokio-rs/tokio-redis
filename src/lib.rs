@@ -1,6 +1,7 @@
-extern crate tokio_proto;
 extern crate futures;
 extern crate tokio_core;
+extern crate tokio_proto;
+extern crate tokio_service;
 
 #[macro_use]
 extern crate log;
@@ -16,12 +17,12 @@ use std::io;
 use std::net::SocketAddr;
 
 use futures::stream::Receiver;
-use futures::{Future, BoxFuture};
+use futures::{Async, Future, BoxFuture};
 use tokio_core::reactor::Handle;
 use tokio_core::net::TcpStream;
 use tokio_core::io::IoFuture;
-use tokio_proto::Service;
 use tokio_proto::pipeline;
+use tokio_service::Service;
 
 use transport::RedisTransport;
 

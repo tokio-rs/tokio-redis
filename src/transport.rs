@@ -1,8 +1,10 @@
 use {Cmd, Value};
 use parser::Parser;
 use types::RedisError;
-use tokio_proto::io::{Readiness, Transport};
+use tokio_core::io::Io;
+use tokio_proto::Transport;
 use tokio_proto::pipeline::{self, Frame};
+use futures::Async;
 use std::mem;
 use std::io::{self, Cursor};
 
@@ -20,11 +22,11 @@ pub struct RedisTransport<T> {
     cmds: Vec<Cmd>,
 }
 
-pub type ReqFrame = Frame<Cmd, RedisError>;
-pub type RespFrame = Frame<Value, RedisError>;
+pub type ReqFrame = Frame<Cmd, (), RedisError>;
+pub type RespFrame = Frame<Value, (), RedisError>;
 
 impl<T> RedisTransport<T>
-    where T: io::Read + io::Write + Readiness,
+    where T: Io,
 {
     pub fn new(inner: T) -> RedisTransport<T> {
         RedisTransport {
@@ -38,7 +40,7 @@ impl<T> RedisTransport<T>
 }
 
 impl<T> RedisTransport<T>
-    where T: io::Read + io::Write + Readiness,
+    where T: Io,
 {
     fn wr_is_empty(&self) -> bool {
         self.wr_remaining() == 0
@@ -86,10 +88,14 @@ impl<T> RedisTransport<T>
 }
 
 impl<T> Transport for RedisTransport<T>
-    where T: io::Read + io::Write + Readiness
+    where T: Io,
 {
     type In = ReqFrame;
     type Out = RespFrame;
+
+    fn poll_read(&mut self) -> Async<()> {
+        self.inner.poll_read()
+    }
 
     /// Read a message from the `Transport`
     fn read(&mut self) -> io::Result<Option<RespFrame>> {
@@ -141,6 +147,14 @@ impl<T> Transport for RedisTransport<T>
         ret
     }
 
+    fn poll_write(&mut self) -> Async<()> {
+        // Always allow writing... this isn't really the best strategy to do in
+        // practice, but it is the easiest to implement in this case. The
+        // number of in-flight requests can be controlled using the pipeline
+        // dispatcher.
+        Async::Ready(())
+    }
+
     /// Write a message to the `Transport`
     fn write(&mut self, req: ReqFrame) -> io::Result<Option<()>> {
         match req {
@@ -181,21 +195,5 @@ impl<T> Transport for RedisTransport<T>
                 return Ok(None);
             }
         }
-    }
-}
-
-impl<T> Readiness for RedisTransport<T>
-    where T: Readiness
-{
-    fn is_readable(&self) -> bool {
-        self.inner.is_readable()
-    }
-
-    fn is_writable(&self) -> bool {
-        // Always allow writing... this isn't really the best strategy to do in
-        // practice, but it is the easiest to implement in this case. The
-        // number of in-flight requests can be controlled using the pipeline
-        // dispatcher.
-        true
     }
 }
