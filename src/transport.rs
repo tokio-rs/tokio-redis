@@ -1,10 +1,9 @@
 use {Cmd, Value};
 use parser::Parser;
 use types::RedisError;
-use tokio_core::io::Io;
-use tokio_proto::Transport;
+use tokio_core::io::{Io, FramedIo};
 use tokio_proto::pipeline::{self, Frame};
-use futures::Async;
+use futures::{Async, Poll};
 use std::mem;
 use std::io::{self, Cursor};
 
@@ -87,7 +86,7 @@ impl<T> RedisTransport<T>
     }
 }
 
-impl<T> Transport for RedisTransport<T>
+impl<T> FramedIo for RedisTransport<T>
     where T: Io,
 {
     type In = ReqFrame;
@@ -98,7 +97,7 @@ impl<T> Transport for RedisTransport<T>
     }
 
     /// Read a message from the `Transport`
-    fn read(&mut self) -> io::Result<Option<RespFrame>> {
+    fn read(&mut self) -> Poll<RespFrame, io::Error> {
         // Not at all a smart implementation, but it gets the job done.
 
         // First fill the buffer
@@ -130,13 +129,13 @@ impl<T> Transport for RedisTransport<T>
             pos = cursor.position() as usize;
 
             match res {
-                Ok(val) => Ok(Some(Frame::Message(val))),
+                Ok(val) => Ok(Async::Ready(Frame::Message(val))),
                 Err(e) => e.into(),
             }
         };
 
         match ret {
-            Ok(None) => {},
+            Ok(Async::NotReady) => {},
             _ => {
                 // Data is consumed
                 let tail = self.rd.split_off(pos);
@@ -156,7 +155,7 @@ impl<T> Transport for RedisTransport<T>
     }
 
     /// Write a message to the `Transport`
-    fn write(&mut self, req: ReqFrame) -> io::Result<Option<()>> {
+    fn write(&mut self, req: ReqFrame) -> Poll<(), io::Error> {
         match req {
             Frame::Message(cmd) => {
                 // Queue the command to be written
@@ -173,14 +172,14 @@ impl<T> Transport for RedisTransport<T>
     }
 
     /// Flush pending writes to the socket
-    fn flush(&mut self) -> io::Result<Option<()>> {
+    fn flush(&mut self) -> Poll<(), io::Error> {
         loop {
             // If the current write buf is empty, try to refill it
             if self.wr_is_empty() {
                 // If there are no pending commands, then all commands have
                 // been fully written
                 if self.cmds.is_empty() {
-                    return Ok(Some(()));
+                    return Ok(Async::Ready(()));
                 }
 
                 // Get the next command
@@ -192,7 +191,7 @@ impl<T> Transport for RedisTransport<T>
 
             // Try to write the remaining buffer
             if !try!(self.wr_flush()) {
-                return Ok(None);
+                return Ok(Async::NotReady);
             }
         }
     }

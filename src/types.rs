@@ -1,3 +1,4 @@
+use futures::{Poll, Async};
 use tokio_proto::pipeline::{self, Frame};
 use std::error;
 use std::fmt;
@@ -146,21 +147,21 @@ impl From<pipeline::Error<RedisError>> for RedisError {
     }
 }
 
-impl Into<io::Result<Option<Frame<Value, (), RedisError>>>> for RedisError {
-    fn into(self) -> io::Result<Option<Frame<Value, (), RedisError>>> {
+impl Into<Poll<Frame<Value, (), RedisError>, io::Error>> for RedisError {
+    fn into(self) -> Poll<Frame<Value, (), RedisError>, io::Error> {
         use self::ErrorRepr::*;
 
         match self.repr {
             IoError(e) => {
                 if e.kind() == io::ErrorKind::WouldBlock {
-                    return Ok(None);
+                    return Ok(Async::NotReady);
                 }
 
                 Err(e)
             }
             repr => {
                 println!("ERRRRRRRR; {:?}", repr);
-                Ok(Some(Frame::Error(RedisError { repr: repr })))
+                Ok(Async::Ready(Frame::Error(RedisError { repr: repr })))
             }
         }
     }

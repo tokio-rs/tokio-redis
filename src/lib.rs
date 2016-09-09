@@ -98,12 +98,16 @@ impl ClientHandle {
 }
 
 impl Service for ClientHandle {
-    type Req = Cmd;
-    type Resp = Value;
+    type Request = Cmd;
+    type Response = Value;
     type Error = Error;
-    type Fut = Response;
+    type Future = Response;
 
     fn call(&self, req: Cmd) -> Response {
         self.inner.call(pipeline::Message::WithoutBody(req))
+    }
+
+    fn poll_ready(&self) -> Async<()> {
+        Async::Ready(())
     }
 }
