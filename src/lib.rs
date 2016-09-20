@@ -1,3 +1,5 @@
+#![allow(unused_imports, dead_code)]
+
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_proto;
@@ -21,7 +23,7 @@ use futures::{Async, Future, BoxFuture};
 use tokio_core::reactor::Handle;
 use tokio_core::net::TcpStream;
 use tokio_core::io::IoFuture;
-use tokio_proto::pipeline;
+use tokio_proto::{pipeline, Message};
 use tokio_service::Service;
 
 use transport::RedisTransport;
@@ -67,15 +69,17 @@ impl Client {
                    handle: &Handle,
                    addr: &SocketAddr)
                    -> Box<Future<Item=ClientHandle, Error=io::Error>> {
-        let handle = handle.clone();
-        Box::new(TcpStream::connect(addr, &handle).and_then(move |tcp| {
-            let tcp = RefCell::new(Some(tcp));
-            let client = try!(pipeline::connect(&handle, move || {
-                Ok(RedisTransport::new(tcp.borrow_mut().take().unwrap()))
-            }));
+        let addr = addr.clone();
+        let h = handle.clone();
 
-            Ok(ClientHandle { inner: client })
-        }))
+        let new_transport = move || {
+            TcpStream::connect(&addr, &h).map(RedisTransport::new)
+        };
+
+        let client = pipeline::connect(new_transport, handle)
+            .map(|inner| ClientHandle { inner: inner });
+
+        Box::new(client)
     }
 }
 
@@ -104,7 +108,7 @@ impl Service for ClientHandle {
     type Future = Response;
 
     fn call(&self, req: Cmd) -> Response {
-        self.inner.call(pipeline::Message::WithoutBody(req))
+        self.inner.call(Message::WithoutBody(req))
     }
 
     fn poll_ready(&self) -> Async<()> {

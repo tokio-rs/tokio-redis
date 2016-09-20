@@ -1,4 +1,5 @@
 use futures::{Poll, Async};
+use tokio_proto;
 use tokio_proto::pipeline::{self, Frame};
 use std::error;
 use std::fmt;
@@ -138,11 +139,11 @@ pub struct RedisError {
     repr: ErrorRepr,
 }
 
-impl From<pipeline::Error<RedisError>> for RedisError {
-    fn from(src: pipeline::Error<RedisError>) -> RedisError {
+impl From<tokio_proto::Error<RedisError>> for RedisError {
+    fn from(src: tokio_proto::Error<RedisError>) -> RedisError {
         match src {
-            pipeline::Error::Io(e) => RedisError { repr: ErrorRepr::IoError(e) },
-            pipeline::Error::Transport(e) => e,
+            tokio_proto::Error::Io(e) => RedisError { repr: ErrorRepr::IoError(e) },
+            tokio_proto::Error::Transport(e) => e,
         }
     }
 }
