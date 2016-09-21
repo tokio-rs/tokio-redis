@@ -51,9 +51,8 @@ pub struct Client {
     _private: (),
 }
 
-#[derive(Clone)]
 pub struct ClientHandle {
-    inner: pipeline::Client<Cmd, Value, Receiver<(), Error>, Error>,
+    inner: tokio_proto::Client<Cmd, Value, Receiver<(), Error>, Error>,
 }
 
 pub type Response = BoxFuture<Value, Error>;
@@ -65,10 +64,7 @@ impl Client {
         }
     }
 
-    pub fn connect(self,
-                   handle: &Handle,
-                   addr: &SocketAddr)
-                   -> Box<Future<Item=ClientHandle, Error=io::Error>> {
+    pub fn connect(self, handle: &Handle, addr: &SocketAddr) -> ClientHandle {
         let addr = addr.clone();
         let h = handle.clone();
 
@@ -76,10 +72,8 @@ impl Client {
             TcpStream::connect(&addr, &h).map(RedisTransport::new)
         };
 
-        let client = pipeline::connect(new_transport, handle)
-            .map(|inner| ClientHandle { inner: inner });
-
-        Box::new(client)
+        let client = pipeline::connect(new_transport, handle);
+        ClientHandle { inner: client }
     }
 }
 

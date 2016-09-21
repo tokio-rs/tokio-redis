@@ -14,16 +14,10 @@ pub fn main() {
     let mut lp = Core::new().unwrap();
 
     let client = Client::new().connect(&lp.handle(), &addr);
-    let c1 = lp.run(client).unwrap();
 
-    let c2 = c1.clone();
+    let r1 = client.set("zomghi2u", "SOME VALUE");
+    let r2 = r1.and_then(move |_| client.get("zomghi2u"));
+    let val = lp.run(r2).unwrap();
 
-    let r = c1.set("zomghi2u", "SOME VALUE")
-        .and_then(move |_| c2.get("zomghi2u"))
-        ;
-
-    // let resp = client.get("zomghi2u");
-    // let resp = client.call("Hello".to_string());
-
-    println!("RESPONSE: {:?}", lp.run(r));
+    println!("RESPONSE: {:?}", val);
 }
