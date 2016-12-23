@@ -1,6 +1,5 @@
 use futures::{Poll, Async};
 use tokio_proto;
-use tokio_proto::pipeline::{self, Frame};
 use std::error;
 use std::fmt;
 use std::io;
@@ -139,17 +138,8 @@ pub struct RedisError {
     repr: ErrorRepr,
 }
 
-impl From<tokio_proto::Error<RedisError>> for RedisError {
-    fn from(src: tokio_proto::Error<RedisError>) -> RedisError {
-        match src {
-            tokio_proto::Error::Io(e) => RedisError { repr: ErrorRepr::IoError(e) },
-            tokio_proto::Error::Transport(e) => e,
-        }
-    }
-}
-
-impl Into<Poll<Frame<Value, (), RedisError>, io::Error>> for RedisError {
-    fn into(self) -> Poll<Frame<Value, (), RedisError>, io::Error> {
+impl Into<Poll<Option<Value>, io::Error>> for RedisError {
+    fn into(self) -> Poll<Option<Value>, io::Error> {
         use self::ErrorRepr::*;
 
         match self.repr {
@@ -162,7 +152,7 @@ impl Into<Poll<Frame<Value, (), RedisError>, io::Error>> for RedisError {
             }
             repr => {
                 println!("ERRRRRRRR; {:?}", repr);
-                Ok(Async::Ready(Frame::Error(RedisError { repr: repr })))
+                Err(io::Error::new(io::ErrorKind::Other, RedisError { repr: repr }))
             }
         }
     }

@@ -18,12 +18,12 @@ use std::cell::RefCell;
 use std::io;
 use std::net::SocketAddr;
 
-use futures::stream::Receiver;
-use futures::{Async, Future, BoxFuture};
-use tokio_core::reactor::Handle;
+use futures::{Async, Future};
+use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
-use tokio_core::io::IoFuture;
-use tokio_proto::{pipeline, Message};
+use tokio_core::reactor::Handle;
+use tokio_proto::TcpClient;
+use tokio_proto::pipeline::{ClientProto, ClientService};
 use tokio_service::Service;
 
 use transport::RedisTransport;
@@ -52,10 +52,24 @@ pub struct Client {
 }
 
 pub struct ClientHandle {
-    inner: tokio_proto::Client<Cmd, Value, Receiver<(), Error>, Error>,
+    inner: ClientService<TcpStream, RedisProto>,
 }
 
-pub type Response = BoxFuture<Value, Error>;
+pub type Response = Box<Future<Item = Value, Error = io::Error>>;
+
+struct RedisProto;
+
+impl<T: Io + 'static> ClientProto<T> for RedisProto {
+    type Request = Cmd;
+    type Response = Value;
+    type Error = io::Error;
+    type Transport = RedisTransport<T>;
+    type BindTransport = io::Result<Self::Transport>;
+
+    fn bind_transport(&self, io: T) -> Self::BindTransport {
+        Ok(RedisTransport::new(io))
+    }
+}
 
 impl Client {
     pub fn new() -> Client {
@@ -64,22 +78,20 @@ impl Client {
         }
     }
 
-    pub fn connect(self, handle: &Handle, addr: &SocketAddr) -> ClientHandle {
-        let addr = addr.clone();
-        let h = handle.clone();
+    pub fn connect(self, addr: &SocketAddr, handle: &Handle)
+            -> Box<Future<Item = ClientHandle, Error = io::Error>>
+    {
+        let ret = TcpClient::new(RedisProto)
+            .connect(addr, handle)
+            .map(|c| ClientHandle { inner: c });
 
-        let new_transport = move || {
-            TcpStream::connect(&addr, &h).map(RedisTransport::new)
-        };
-
-        let client = pipeline::connect(new_transport, handle);
-        ClientHandle { inner: client }
+        Box::new(ret)
     }
 }
 
 impl ClientHandle {
     /// Get the value of a key.  If key is a vec this becomes an `MGET`.
-    pub fn get<K: ToRedisArgs>(&self, key: K) -> Response {
+    pub fn get<K: ToRedisArgs>(&mut self, key: K) -> Response {
         let mut cmd = Cmd::new();
         cmd.arg(if key.is_single_arg() { "GET" } else { "MGET" }).arg(key);
 
@@ -87,7 +99,7 @@ impl ClientHandle {
     }
 
     /// Set the string value of a key.
-    pub fn set<K: ToRedisArgs, V: ToRedisArgs>(&self, key: K, value: V) -> Response {
+    pub fn set<K: ToRedisArgs, V: ToRedisArgs>(&mut self, key: K, value: V) -> Response {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg(key).arg(value);
 
@@ -98,14 +110,10 @@ impl ClientHandle {
 impl Service for ClientHandle {
     type Request = Cmd;
     type Response = Value;
-    type Error = Error;
+    type Error = io::Error;
     type Future = Response;
 
-    fn call(&self, req: Cmd) -> Response {
-        self.inner.call(Message::WithoutBody(req))
-    }
-
-    fn poll_ready(&self) -> Async<()> {
-        Async::Ready(())
+    fn call(&mut self, req: Cmd) -> Response {
+        Box::new(self.inner.call(req))
     }
 }

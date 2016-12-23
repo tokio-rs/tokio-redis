@@ -1,9 +1,8 @@
 use {Cmd, Value};
 use parser::Parser;
 use types::RedisError;
-use tokio_core::io::{Io, FramedIo};
-use tokio_proto::pipeline::{self, Frame};
-use futures::{Async, Poll};
+use tokio_core::io::Io;
+use futures::{Async, AsyncSink, Poll, Stream, Sink, StartSend};
 use std::mem;
 use std::io::{self, Cursor};
 
@@ -21,8 +20,10 @@ pub struct RedisTransport<T> {
     cmds: Vec<Cmd>,
 }
 
-pub type ReqFrame = Frame<Cmd, (), RedisError>;
-pub type RespFrame = Frame<Value, (), RedisError>;
+struct RedisProto;
+
+// pub type ReqFrame = Frame<Cmd, (), RedisError>;
+// pub type RespFrame = Frame<Value, (), RedisError>;
 
 impl<T> RedisTransport<T>
     where T: Io,
@@ -86,18 +87,14 @@ impl<T> RedisTransport<T>
     }
 }
 
-impl<T> FramedIo for RedisTransport<T>
+impl<T> Stream for RedisTransport<T>
     where T: Io,
 {
-    type In = ReqFrame;
-    type Out = RespFrame;
-
-    fn poll_read(&mut self) -> Async<()> {
-        self.inner.poll_read()
-    }
+    type Item = Value;
+    type Error = io::Error;
 
     /// Read a message from the `Transport`
-    fn read(&mut self) -> Poll<RespFrame, io::Error> {
+    fn poll(&mut self) -> Poll<Option<Value>, io::Error> {
         // Not at all a smart implementation, but it gets the job done.
 
         // First fill the buffer
@@ -129,7 +126,7 @@ impl<T> FramedIo for RedisTransport<T>
             pos = cursor.position() as usize;
 
             match res {
-                Ok(val) => Ok(Async::Ready(Frame::Message(val))),
+                Ok(val) => Ok(Async::Ready(Some(val))),
                 Err(e) => e.into(),
             }
         };
@@ -145,34 +142,22 @@ impl<T> FramedIo for RedisTransport<T>
 
         ret
     }
+}
 
-    fn poll_write(&mut self) -> Async<()> {
-        // Always allow writing... this isn't really the best strategy to do in
-        // practice, but it is the easiest to implement in this case. The
-        // number of in-flight requests can be controlled using the pipeline
-        // dispatcher.
-        Async::Ready(())
-    }
+impl<T> Sink for RedisTransport<T>
+    where T: Io,
+{
+    type SinkItem = Cmd;
+    type SinkError = io::Error;
 
     /// Write a message to the `Transport`
-    fn write(&mut self, req: ReqFrame) -> Poll<(), io::Error> {
-        match req {
-            Frame::Message(cmd) => {
-                // Queue the command to be written
-                self.cmds.push(cmd);
-
-                // Try to flush the write queue
-                self.flush()
-            },
-            Frame::MessageWithBody(..) => unimplemented!(),
-            Frame::Body(..) => unimplemented!(),
-            Frame::Error(_) => unimplemented!(),
-            Frame::Done => unimplemented!(),
-        }
+    fn start_send(&mut self, cmd: Cmd) -> StartSend<Cmd, io::Error> {
+        self.cmds.push(cmd);
+        Ok(AsyncSink::Ready)
     }
 
     /// Flush pending writes to the socket
-    fn flush(&mut self) -> Poll<(), io::Error> {
+    fn poll_complete(&mut self) -> Poll<(), io::Error> {
         loop {
             // If the current write buf is empty, try to refill it
             if self.wr_is_empty() {

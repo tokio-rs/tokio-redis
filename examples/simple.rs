@@ -13,11 +13,13 @@ pub fn main() {
     let addr = "127.0.0.1:6379".parse().unwrap();
     let mut lp = Core::new().unwrap();
 
-    let client = Client::new().connect(&lp.handle(), &addr);
+    let res = Client::new().connect(&addr, &lp.handle())
+        .and_then(|mut client| {
+            let r1 = client.set("zomghi2u", "SOME VALUE");
+            r1.and_then(move |_| client.get("zomghi2u"))
+        });
 
-    let r1 = client.set("zomghi2u", "SOME VALUE");
-    let r2 = r1.and_then(move |_| client.get("zomghi2u"));
-    let val = lp.run(r2).unwrap();
 
+    let val = lp.run(res).unwrap();
     println!("RESPONSE: {:?}", val);
 }
