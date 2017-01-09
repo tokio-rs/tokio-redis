@@ -113,7 +113,7 @@ impl Service for ClientHandle {
     type Error = io::Error;
     type Future = Response;
 
-    fn call(&mut self, req: Cmd) -> Response {
+    fn call(&self, req: Cmd) -> Response {
         Box::new(self.inner.call(req))
     }
 }
