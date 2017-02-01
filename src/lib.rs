@@ -62,7 +62,6 @@ struct RedisProto;
 impl<T: Io + 'static> ClientProto<T> for RedisProto {
     type Request = Cmd;
     type Response = Value;
-    type Error = io::Error;
     type Transport = RedisTransport<T>;
     type BindTransport = io::Result<Self::Transport>;
 
