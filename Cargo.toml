@@ -7,6 +7,7 @@ authors = ["Carl Lerche <me@carllerche.com>", "Armin Ronacher <armin.ronacher@ac
 log = "0.3.6"
 futures = "0.1"
 tokio-core = "0.1"
+tokio-io = "0.1"
 tokio-proto = "0.1"
 tokio-service = "0.1"
 

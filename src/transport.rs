@@ -1,7 +1,7 @@
 use {Cmd, Value};
 use parser::Parser;
 use types::RedisError;
-use tokio_core::io::Io;
+use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{Async, AsyncSink, Poll, Stream, Sink, StartSend};
 use std::mem;
 use std::io::{self, Cursor};
@@ -26,7 +26,7 @@ struct RedisProto;
 // pub type RespFrame = Frame<Value, (), RedisError>;
 
 impl<T> RedisTransport<T>
-    where T: Io,
+    where T: AsyncRead + AsyncWrite,
 {
     pub fn new(inner: T) -> RedisTransport<T> {
         RedisTransport {
@@ -40,7 +40,7 @@ impl<T> RedisTransport<T>
 }
 
 impl<T> RedisTransport<T>
-    where T: Io,
+    where T: AsyncRead + AsyncWrite,
 {
     fn wr_is_empty(&self) -> bool {
         self.wr_remaining() == 0
@@ -88,7 +88,7 @@ impl<T> RedisTransport<T>
 }
 
 impl<T> Stream for RedisTransport<T>
-    where T: Io,
+    where T: AsyncRead + AsyncWrite,
 {
     type Item = Value;
     type Error = io::Error;
@@ -145,7 +145,7 @@ impl<T> Stream for RedisTransport<T>
 }
 
 impl<T> Sink for RedisTransport<T>
-    where T: Io,
+    where T: AsyncRead + AsyncWrite,
 {
     type SinkItem = Cmd;
     type SinkError = io::Error;

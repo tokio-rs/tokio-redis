@@ -110,7 +110,7 @@ impl<'a, T: Read> Parser<T> {
                 Ok(nread) if nread > 0 =>
                     i += nread,
                 Ok(_) =>
-                    return fail!((ErrorKind::ResponseError, "Could not read enough bytes")),
+                    fail!((ErrorKind::ResponseError, "Could not read enough bytes")),
                 Err(e) =>
                     return Err(From::from(e))
             }

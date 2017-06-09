@@ -2,6 +2,7 @@
 
 extern crate futures;
 extern crate tokio_core;
+extern crate tokio_io;
 extern crate tokio_proto;
 extern crate tokio_service;
 
@@ -19,9 +20,9 @@ use std::io;
 use std::net::SocketAddr;
 
 use futures::{Async, Future};
-use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Handle;
+use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_proto::TcpClient;
 use tokio_proto::pipeline::{ClientProto, ClientService};
 use tokio_service::Service;
@@ -59,7 +60,7 @@ pub type Response = Box<Future<Item = Value, Error = io::Error>>;
 
 struct RedisProto;
 
-impl<T: Io + 'static> ClientProto<T> for RedisProto {
+impl<T: AsyncRead + AsyncWrite + 'static> ClientProto<T> for RedisProto {
     type Request = Cmd;
     type Response = Value;
     type Transport = RedisTransport<T>;
